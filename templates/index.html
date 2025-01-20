@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dominant Color Extractor</title>
+    <title>Color Palette Extractor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -24,14 +25,12 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        #color-square {
-            width: 100px;
-            height: 100px;
+        .color-square {
+            width: 50px;
+            height: 50px;
             border: 1px solid #333;
-            margin-top: 10px;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
+            margin: 5px;
+            display: inline-block;
         }
         #uploadedImage {
             margin-top: 20px;
@@ -45,6 +44,9 @@
         .result-container p {
             margin: 5px 0;
         }
+        #crop-button, #download-buttons {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -52,20 +54,27 @@
     <div id="upload-container">
         <input type="file" id="imageUpload" accept="image/*">
         <img id="uploadedImage" src="#" alt="Uploaded Image" hidden>
+        <button id="crop-button">Crop and Analyze</button>
+        <div id="download-buttons" style="display: none;">
+            <button id="download-image-button">Download Image</button>
+            <button id="download-report-button">Download Report</button>
+        </div>
         <div class="result-container">
-            <h2>Dominant Color:</h2>
-            <div id="color-square"></div>
-            <p>Hex Code: <span id="hex-code"></span></p>
-            <p>Color Name: <span id="color-name"></span></p>
+            <h2>Color Palette:</h2>
+            <div id="color-palette"></div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script>
         const imageUpload = document.getElementById('imageUpload');
         const uploadedImage = document.getElementById('uploadedImage');
-        const colorSquare = document.getElementById('color-square');
-        const hexCode = document.getElementById('hex-code');
-        const colorName = document.getElementById('color-name');
+        const colorPalette = document.getElementById('color-palette');
+        const cropButton = document.getElementById('crop-button');
+        const downloadButtons = document.getElementById('download-buttons');
+        const downloadImageButton = document.getElementById('download-image-button');
+        const downloadReportButton = document.getElementById('download-report-button');
+        let cropper;
 
         imageUpload.addEventListener('change', (event) => {
             const file = event.target.files[0];
@@ -75,27 +84,61 @@
                 uploadedImage.src = e.target.result;
                 uploadedImage.hidden = false;
 
-                const formData = new FormData();
-                formData.append('file', file);
-
-                fetch('/', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    colorSquare.style.backgroundColor = data.hex_code;
-                    hexCode.textContent = data.hex_code;
-                    colorName.textContent = data.color_name;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
+                cropper = new Cropper(uploadedImage, {
+                    aspectRatio: NaN,
+                    viewMode: 1,
+                    dragMode: 'crop',
+                    crop(event) {
+                        console.log(event.detail.x);
+                        console.log(event.detail.y);
+                        console.log(event.detail.width);
+                        console.log(event.detail.height);
+                    },
                 });
             };
 
             if (file) {
                 reader.readAsDataURL(file);
             }
+        });
+
+        cropButton.addEventListener('click', () => {
+            const cropData = cropper.getData();
+            const formData = new FormData();
+            formData.append('file', imageUpload.files[0]);
+            formData.append('x', cropData.x);
+            formData.append('y', cropData.y);
+            formData.append('width', cropData.width);
+            formData.append('height', cropData.height);
+
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                colorPalette.innerHTML = ''; // Clear previous palette
+                data.colors.forEach(color => {
+                    const colorDiv = document.createElement('div');
+                    colorDiv.className = 'color-square';
+                    colorDiv.style.backgroundColor = color.hex_code;
+                    colorDiv.title = `Hex Code: ${color.hex_code}\nColor Name: ${color.color_name}`;
+                    colorPalette.appendChild(colorDiv);
+                });
+
+                downloadButtons.style.display = 'block';
+
+                downloadImageButton.onclick = () => {
+                    window.location.href = '/download/image';
+                };
+
+                downloadReportButton.onclick = () => {
+                    window.location.href = '/download/report';
+                };
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
         });
     </script>
 </body>
